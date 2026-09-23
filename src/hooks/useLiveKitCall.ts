@@ -11,7 +11,7 @@ import {
   LocalTrackPublication,
 } from 'livekit-client';
 import type { CallState, ParticipantInfo, LiveKitDataMessage } from '../types';
-import { createLiveKitRoom } from '../lib/livekit';
+import { createLiveKitRoom, formatLiveKitUrl } from '../lib/livekit';
 
 interface UseLiveKitCallOptions {
   onRemoteAudioTrackChanged?: (track: MediaStreamTrack | null) => void;
@@ -93,7 +93,8 @@ export function useLiveKitCall({
         });
         setCallState('connected');
 
-        // Production-level logic: Start call timer ONLY when remote participant is connected!
+        // PRODUCTION LEVEL REQUIREMENT:
+        // Start duration timer ONLY when second participant has actually connected to the call!
         if (!isTimerRunningRef.current) {
           startTimer();
         }
@@ -230,8 +231,9 @@ export function useLiveKitCall({
           }
         });
 
-        // Connect room over WebSocket
-        await room.connect(liveKitUrl, token, {
+        // Connect room over WebSocket with normalized LiveKit URL
+        const wsUrl = formatLiveKitUrl(liveKitUrl);
+        await room.connect(wsUrl, token, {
           autoSubscribe: true,
         });
 

@@ -6,6 +6,30 @@ export const DEFAULT_LIVEKIT_TOKEN = import.meta.env.VITE_LIVEKIT_TOKEN || '';
 export const DEFAULT_TOKEN_ENDPOINT = import.meta.env.VITE_LIVEKIT_TOKEN_ENDPOINT || '';
 
 /**
+ * Format & normalize LiveKit URL to ensure valid WebSocket URL protocol (wss:// or ws://)
+ */
+export function formatLiveKitUrl(url?: string): string {
+  const fallback = 'wss://dost-talk-3b4tto0n.livekit.cloud';
+  let raw = (url || import.meta.env.VITE_LIVEKIT_URL || fallback).trim();
+
+  if (!raw) return fallback;
+
+  // Clean trailing slashes, quotes, or accidental whitespace
+  raw = raw.replace(/^["']|["']$/g, '').replace(/\/+$/, '');
+
+  // Convert http/https to ws/wss
+  if (raw.startsWith('http://')) {
+    raw = raw.replace('http://', 'ws://');
+  } else if (raw.startsWith('https://')) {
+    raw = raw.replace('https://', 'wss://');
+  } else if (!/^wss?:\/\//i.test(raw)) {
+    raw = `wss://${raw}`;
+  }
+
+  return raw;
+}
+
+/**
  * Optimized LiveKit Room configuration for ultra-low-latency 2-person audio calling
  */
 export function createLiveKitRoom(): Room {
@@ -24,7 +48,6 @@ export function createLiveKitRoom(): Room {
     },
     reconnectPolicy: {
       nextRetryDelayInMs: (context) => {
-        // Exponential backoff up to 5 attempts
         if (context.retryCount > 5) return null;
         return Math.min(1000 * Math.pow(1.5, context.retryCount), 6000);
       },
@@ -41,8 +64,8 @@ export async function generateFallbackToken(
   roomId: string,
   participantName: string
 ): Promise<string> {
-  const apiKey = import.meta.env.LIVEKIT_API_KEY || 'APIgfDf6krFFzKK';
-  const apiSecret = import.meta.env.LIVEKIT_API_SECRET || 'bUHRtdSsNOGGOGQLvb7oLF48U00mc0ViQNazPlqqTTC';
+  const apiKey = import.meta.env.LIVEKIT_API_KEY || import.meta.env.VITE_LIVEKIT_API_KEY || 'APIgfDf6krFFzKK';
+  const apiSecret = import.meta.env.LIVEKIT_API_SECRET || import.meta.env.VITE_LIVEKIT_API_SECRET || 'bUHRtdSsNOGGOGQLvb7oLF48U00mc0ViQNazPlqqTTC';
 
   const at = new AccessToken(apiKey, apiSecret, {
     identity: participantName,
