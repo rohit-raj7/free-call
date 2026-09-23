@@ -34,6 +34,7 @@ export function useLiveKitCall({
 
   const roomRef = useRef<Room | null>(null);
   const timerIntervalRef = useRef<number | null>(null);
+  const isTimerRunningRef = useRef<boolean>(false);
   const remoteAudioElementRef = useRef<HTMLAudioElement | null>(null);
 
   // Keep track callbacks updated in refs
@@ -48,52 +49,66 @@ export function useLiveKitCall({
       window.clearInterval(timerIntervalRef.current);
       timerIntervalRef.current = null;
     }
+    isTimerRunningRef.current = false;
   }, []);
 
-  // Start call timer
+  // Start call timer (only if not already running)
   const startTimer = useCallback(() => {
+    if (isTimerRunningRef.current) return;
     clearTimer();
     setCallDuration(0);
+    isTimerRunningRef.current = true;
     timerIntervalRef.current = window.setInterval(() => {
       setCallDuration((prev) => prev + 1);
     }, 1000);
   }, [clearTimer]);
 
   // Update participant state helper
-  const updateParticipantStates = useCallback((room: Room) => {
-    // Local
-    const local = room.localParticipant;
-    if (local) {
-      setLocalParticipantInfo({
-        identity: local.identity,
-        name: local.name || local.identity || 'You',
-        isLocal: true,
-        isMuted: local.isMicrophoneEnabled === false,
-        isSpeaking: local.isSpeaking,
-        audioLevel: local.audioLevel,
-      });
-    }
-
-    // Remote (Find the first active remote participant for 2-person call)
-    const remotes = Array.from(room.remoteParticipants.values());
-    if (remotes.length > 0) {
-      const primaryRemote = remotes[0];
-      setRemoteParticipantInfo({
-        identity: primaryRemote.identity,
-        name: primaryRemote.name || primaryRemote.identity || 'Participant',
-        isLocal: false,
-        isMuted: primaryRemote.isMicrophoneEnabled === false,
-        isSpeaking: primaryRemote.isSpeaking,
-        audioLevel: primaryRemote.audioLevel,
-      });
-      setCallState('connected');
-    } else {
-      setRemoteParticipantInfo(null);
-      if (room.state === ConnectionState.Connected) {
-        setCallState('waiting');
+  const updateParticipantStates = useCallback(
+    (room: Room) => {
+      // Local
+      const local = room.localParticipant;
+      if (local) {
+        setLocalParticipantInfo({
+          identity: local.identity,
+          name: local.name || local.identity || 'You',
+          isLocal: true,
+          isMuted: local.isMicrophoneEnabled === false,
+          isSpeaking: local.isSpeaking,
+          audioLevel: local.audioLevel,
+        });
       }
-    }
-  }, []);
+
+      // Remote (Find the first active remote participant for 2-person call)
+      const remotes = Array.from(room.remoteParticipants.values());
+      if (remotes.length > 0) {
+        const primaryRemote = remotes[0];
+        setRemoteParticipantInfo({
+          identity: primaryRemote.identity,
+          name: primaryRemote.name || primaryRemote.identity || 'Participant',
+          isLocal: false,
+          isMuted: primaryRemote.isMicrophoneEnabled === false,
+          isSpeaking: primaryRemote.isSpeaking,
+          audioLevel: primaryRemote.audioLevel,
+        });
+        setCallState('connected');
+
+        // Production-level logic: Start call timer ONLY when remote participant is connected!
+        if (!isTimerRunningRef.current) {
+          startTimer();
+        }
+      } else {
+        setRemoteParticipantInfo(null);
+        if (room.state === ConnectionState.Connected) {
+          setCallState('waiting');
+        }
+        // When waiting for another person (or if remote participant leaves), stop timer & reset call duration
+        clearTimer();
+        setCallDuration(0);
+      }
+    },
+    [clearTimer, startTimer]
+  );
 
   // Connect to LiveKit Room
   const connect = useCallback(
@@ -118,12 +133,13 @@ export function useLiveKitCall({
         // Room event listeners
         room.on(RoomEvent.Connected, () => {
           updateParticipantStates(room);
-          startTimer();
+          // Note: Timer is NOT started here! Starts dynamically in updateParticipantStates ONLY when 2nd participant connects.
         });
 
         room.on(RoomEvent.Disconnected, () => {
           setCallState('disconnected');
           clearTimer();
+          setCallDuration(0);
           setPeerRecordingActive(false);
           onRemoteAudioTrackChangedRef.current?.(null);
           onLocalAudioTrackChangedRef.current?.(null);
@@ -265,7 +281,7 @@ export function useLiveKitCall({
       const nextMutedState = !currentlyMuted;
       await roomRef.current.localParticipant.setMicrophoneEnabled(!nextMutedState);
       setIsMuted(nextMutedState);
-      
+
       setLocalParticipantInfo((prev) =>
         prev
           ? {
