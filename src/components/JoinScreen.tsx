@@ -1,22 +1,22 @@
 import React, { useState, useEffect } from 'react';
-import { DEFAULT_LIVEKIT_URL, DEFAULT_LIVEKIT_TOKEN, DEFAULT_TOKEN_ENDPOINT, fetchTokenFromEndpoint } from '../lib/livekit';
-import { PhoneCall, Copy, Check, Link as LinkIcon, Sparkles } from 'lucide-react';
+import { PhoneCall, Copy, Link as LinkIcon, Check, Sparkles } from 'lucide-react';
+import { LIVEKIT_URL, generateLiveKitToken } from '../lib/livekit';
 
 interface JoinScreenProps {
   onJoin: (config: { liveKitUrl: string; token: string; roomId: string; name: string }) => void;
-  isConnecting: boolean;
+  isConnecting?: boolean;
   initialError?: string | null;
 }
 
 export const JoinScreen: React.FC<JoinScreenProps> = ({
   onJoin,
-  isConnecting,
-  initialError,
+  isConnecting = false,
+  initialError = null,
 }) => {
   const [name, setName] = useState<string>('');
   const [roomId, setRoomId] = useState<string>('call-101');
-  const [copiedLink, setCopiedLink] = useState<boolean>(false);
   const [copiedRoom, setCopiedRoom] = useState<boolean>(false);
+  const [copiedLink, setCopiedLink] = useState<boolean>(false);
   const [localError, setLocalError] = useState<string | null>(null);
 
   // Auto-fill Room ID from URL query parameters (?room=abc123)
@@ -70,7 +70,6 @@ export const JoinScreen: React.FC<JoinScreenProps> = ({
 
     const cleanName = name.trim();
     const cleanRoom = roomId.trim();
-    const cleanUrl = DEFAULT_LIVEKIT_URL.trim();
 
     if (!cleanName) {
       setLocalError('Please enter your name.');
@@ -82,28 +81,23 @@ export const JoinScreen: React.FC<JoinScreenProps> = ({
     }
 
     try {
-      let resolvedToken = DEFAULT_LIVEKIT_TOKEN.trim();
-
-      // Automatically fetch token from endpoint (/api/token) using env credentials
-      const tokenEndpoint = DEFAULT_TOKEN_ENDPOINT || '/api/token';
-      if (!resolvedToken) {
-        resolvedToken = await fetchTokenFromEndpoint(tokenEndpoint, cleanRoom, cleanName);
-      }
+      // Directly generate participant token synchronously in code (0 HTTP requests, no 404 on Vercel)
+      const resolvedToken = await generateLiveKitToken(cleanRoom, cleanName);
 
       if (!resolvedToken) {
-        setLocalError('Failed to generate LiveKit participant token. Please check your connection.');
+        setLocalError('Failed to generate LiveKit participant token.');
         return;
       }
 
       onJoin({
-        liveKitUrl: cleanUrl,
+        liveKitUrl: LIVEKIT_URL,
         token: resolvedToken,
         roomId: cleanRoom,
         name: cleanName,
       });
     } catch (err: any) {
       console.error('Join preparation error:', err);
-      setLocalError(err.message || 'Failed to connect. Please check server settings.');
+      setLocalError(err.message || 'Failed to connect. Please check settings.');
     }
   };
 
@@ -126,7 +120,7 @@ export const JoinScreen: React.FC<JoinScreenProps> = ({
         {/* Error Alert */}
         {effectiveError && (
           <div className="mb-4 p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs leading-relaxed flex items-start gap-2 animate-fade-in">
-            <span className="font-bold">•</span>
+            <span className="font-bold">??</span>
             <span>{effectiveError}</span>
           </div>
         )}

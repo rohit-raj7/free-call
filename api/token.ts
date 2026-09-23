@@ -21,13 +21,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const identity = (req.query.identity as string) || (req.query.name as string) || `user-${Math.floor(Math.random() * 10000)}`;
     const name = (req.query.name as string) || identity;
 
-    const apiKey = process.env.LIVEKIT_API_KEY || process.env.VITE_LIVEKIT_API_KEY || 'APIgfDf6krFFzKK';
-    const apiSecret = process.env.LIVEKIT_API_SECRET || process.env.VITE_LIVEKIT_API_SECRET || 'bUHRtdSsNOGGOGQLvb7oLF48U00mc0ViQNazPlqqTTC';
+    const apiKey = 'APIgfDf6krFFzKK';
+    const apiSecret = 'bUHRtdSsNOGGOGQLvb7oLF48U00mc0ViQNazPlqqTTC';
 
     const at = new AccessToken(apiKey, apiSecret, {
       identity,
       name,
-      ttl: '4h',
+      ttl: '8h',
     });
 
     at.addGrant({

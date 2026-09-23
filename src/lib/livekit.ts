@@ -1,18 +1,22 @@
 import { Room, type RoomOptions, AudioPresets } from 'livekit-client';
 import { AccessToken } from 'livekit-server-sdk';
 
-export const DEFAULT_LIVEKIT_URL = import.meta.env.VITE_LIVEKIT_URL || 'wss://dost-talk-3b4tto0n.livekit.cloud';
-export const DEFAULT_LIVEKIT_TOKEN = import.meta.env.VITE_LIVEKIT_TOKEN || '';
-export const DEFAULT_TOKEN_ENDPOINT = import.meta.env.VITE_LIVEKIT_TOKEN_ENDPOINT || '';
+// Direct Hardcoded LiveKit Credentials (Production & Standalone Vercel Ready)
+export const LIVEKIT_URL = 'wss://dost-talk-3b4tto0n.livekit.cloud';
+export const LIVEKIT_API_KEY = 'APIgfDf6krFFzKK';
+export const LIVEKIT_API_SECRET = 'bUHRtdSsNOGGOGQLvb7oLF48U00mc0ViQNazPlqqTTC';
+
+export const DEFAULT_LIVEKIT_URL = LIVEKIT_URL;
+export const DEFAULT_LIVEKIT_TOKEN = '';
+export const DEFAULT_TOKEN_ENDPOINT = '';
 
 /**
  * Format & normalize LiveKit URL to ensure valid WebSocket URL protocol (wss:// or ws://)
  */
 export function formatLiveKitUrl(url?: string): string {
-  const fallback = 'wss://dost-talk-3b4tto0n.livekit.cloud';
-  let raw = (url || import.meta.env.VITE_LIVEKIT_URL || fallback).trim();
+  let raw = (url || LIVEKIT_URL).trim();
 
-  if (!raw) return fallback;
+  if (!raw) return LIVEKIT_URL;
 
   // Clean trailing slashes, quotes, or accidental whitespace
   raw = raw.replace(/^["']|["']$/g, '').replace(/\/+$/, '');
@@ -58,19 +62,17 @@ export function createLiveKitRoom(): Room {
 }
 
 /**
- * Fallback token generation directly using LiveKit Server SDK
+ * Direct Client-Side Token Generation
+ * Generates an Access Token instantly without requiring external HTTP /api/token server endpoints.
  */
-export async function generateFallbackToken(
+export async function generateLiveKitToken(
   roomId: string,
   participantName: string
 ): Promise<string> {
-  const apiKey = import.meta.env.LIVEKIT_API_KEY || import.meta.env.VITE_LIVEKIT_API_KEY || 'APIgfDf6krFFzKK';
-  const apiSecret = import.meta.env.LIVEKIT_API_SECRET || import.meta.env.VITE_LIVEKIT_API_SECRET || 'bUHRtdSsNOGGOGQLvb7oLF48U00mc0ViQNazPlqqTTC';
-
-  const at = new AccessToken(apiKey, apiSecret, {
+  const at = new AccessToken(LIVEKIT_API_KEY, LIVEKIT_API_SECRET, {
     identity: participantName,
     name: participantName,
-    ttl: '4h',
+    ttl: '8h',
   });
 
   at.addGrant({
@@ -85,45 +87,12 @@ export async function generateFallbackToken(
 }
 
 /**
- * Fetch a participant token from a remote token service endpoint if provided,
- * with fallback to client-side token generation if endpoint returns 404 or fails.
+ * Helper to fetch or generate token for a participant directly
  */
 export async function fetchTokenFromEndpoint(
-  endpoint: string,
+  _endpoint: string,
   roomId: string,
   participantName: string
 ): Promise<string> {
-  try {
-    const url = new URL(endpoint, window.location.origin);
-    url.searchParams.set('room', roomId);
-    url.searchParams.set('identity', participantName);
-    url.searchParams.set('name', participantName);
-
-    const response = await fetch(url.toString(), {
-      method: 'GET',
-      headers: {
-        'Accept': 'application/json, text/plain',
-      },
-    });
-
-    if (!response.ok) {
-      if (response.status === 404) {
-        console.warn('Token endpoint 404. Generating fallback participant token.');
-        return await generateFallbackToken(roomId, participantName);
-      }
-      const errorText = await response.text().catch(() => response.statusText);
-      throw new Error(`Token service error (${response.status}): ${errorText}`);
-    }
-
-    const contentType = response.headers.get('content-type') || '';
-    if (contentType.includes('application/json')) {
-      const data = await response.json();
-      return data.token || data.jwt || data.accessToken || data;
-    } else {
-      return (await response.text()).trim();
-    }
-  } catch (err: any) {
-    console.warn('Token endpoint fetch failed. Falling back to client-side token generation:', err);
-    return await generateFallbackToken(roomId, participantName);
-  }
+  return await generateLiveKitToken(roomId, participantName);
 }
